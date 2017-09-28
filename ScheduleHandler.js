@@ -16,10 +16,13 @@ function uuidv4() {
   }
 
 exports.handler = function(event, context, callback) {
+    var AWS = require('aws-sdk');
+    var docClient = new AWS.DynamoDB.DocumentClient();
     var responseCode = 200;
     var requestBody, pathParams, queryStringParams, headerParams, stage,
     stageVariables, cognitoIdentityId, httpMethod, sourceIp, userAgent,
     requestId, resourcePath;
+    
     console.log("request: " + JSON.stringify(event));
 
     // Request Body
@@ -36,6 +39,8 @@ exports.handler = function(event, context, callback) {
 
     // Query String Parameters
     queryStringParams = event.queryStringParameters;
+    
+    console.log("query: " + queryStringParams);
 
     // Header Parameters
     headerParams = event.headers;
@@ -92,13 +97,30 @@ exports.handler = function(event, context, callback) {
             .then(data => {
                 console.log("Query succeeded.");
                 console.log("response: " + JSON.stringify(data))
+            
+                // extracts data for a specific date
+                var targetDate = queryStringParams.Date;
+                console.log("date: " + targetDate);
+                var result = [];
+                
+                if (data.Count > 0 )
+                {
+                    console.log("items count: " + data.Count)
+                    data.Items.forEach(function(item) {
+                        console.log("comparing with: " + item.Date);
+                        if(item.Date == targetDate) {
+                            result.push(item);
+                        }
+                    });
+                }
+                
                 // context.succeed(data.Items);
                 var response = {
                     statusCode: 200,
                     headers: {
                         "x-TxTracker-header" : "Schedule"
                     },
-                    body: JSON.stringify(data.Items)
+                    body: JSON.stringify(result)
                 };
                 context.succeed(response);
             })
@@ -116,11 +138,12 @@ exports.handler = function(event, context, callback) {
                 "userId":jbody.userId,
                 "clientId":jbody.clientId,
                 "jobId":uuidv4(),
-                "Date":jbody.DateTime,
+                "Date":jbody.Date,
                 "Notes":jbody.Notes,
                 "Hours":jbody.Hours,
                 "StartTime":jbody.StartTime,
-                "StopTime":jbody.StopTime
+                "StopTime":jbody.StopTime,
+                "EventName":jbody.EventName
             }
         };
         
@@ -155,15 +178,16 @@ exports.handler = function(event, context, callback) {
                 "userId":parsedBody.userId,
                 "jobId":parsedBody.jobId
             },
-            UpdateExpression: 'set #date = :date, #hours = :hours, #starttime = :starttime, #stoptime = :stoptime, #clientId = :clientId, #notes = :notes',
-            ExpressionAttributeNames: {'#date': 'Date', '#hours': 'Hours', '#starttime' : 'StartTime', '#stoptime' : 'StopTime', '#clientId' : 'clientId', '#notes' : 'Notes'},
+            UpdateExpression: 'set #eventName = :eventName,  #date = :date, #hours = :hours, #starttime = :starttime, #stoptime = :stoptime, #clientId = :clientId, #notes = :notes',
+            ExpressionAttributeNames: {'#eventName': 'EventName','#date': 'Date', '#hours': 'Hours', '#starttime' : 'StartTime', '#stoptime' : 'StopTime', '#clientId' : 'clientId', '#notes' : 'Notes'},
             ExpressionAttributeValues: {
-                ':date' : parsedBody.Store,
+                ':date' : parsedBody.Date,
                 ':hours' : parsedBody.Hours,
-                ':starttime' : parsedBody.Amount,
-                ':stoptime' : parsedBody.Attachments,
+                ':starttime' : parsedBody.StartTime,
+                ':stoptime' : parsedBody.StopTime,
                 ':clientId' : parsedBody.clientId,
-                ':notes' : parsedBody.Notes
+                ':notes' : parsedBody.Notes,
+                ':eventName' : parsedBody.EventName
             }
         };
         
